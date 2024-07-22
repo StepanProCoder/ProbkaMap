@@ -1,6 +1,7 @@
 package com.example.probkamap;
 
 import android.graphics.Color;
+import android.util.Log;
 import android.view.MotionEvent;
 
 import org.osmdroid.views.overlay.Overlay;
@@ -83,24 +84,46 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
     private void buildRoute(List<GeoPoint> waypoints) {
         try {
-            List<GHPoint> routePoints = openRouteServiceClient.requestRoute(waypoints);
-            displayRoute(routePoints);
+            List<GeoPoint> betterRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
+            List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(betterRoute);
+            List<GHPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute);
+            displayRouteGH(routePoints, 0xFF0000FF);
+            displayRouteGeo(simplifiedRoute, 0xFF00FF00);
+            Log.d("RDP", simplifiedRoute.size()+"");
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void displayRoute(List<GHPoint> routePoints) {
+    public void displayRouteGH(List<GHPoint> routePoints, int color) {
         if (routePoints == null || routePoints.isEmpty()) {
             return;
         }
 
         Polyline polyline = new Polyline();
-        polyline.setColor(0xFF0000FF); // Blue color
+        polyline.setColor(color); // Blue color
         polyline.setWidth(5); // Line width
 
         for (GHPoint point : routePoints) {
             GeoPoint geoPoint = new GeoPoint(point.lat, point.lon);
+            polyline.addPoint(geoPoint);
+        }
+
+        mapView.getOverlayManager().add(polyline);
+        mapView.invalidate(); // Перерисовываем карту
+    }
+
+    public void displayRouteGeo(List<GeoPoint> routePoints, int color) {
+        if (routePoints == null || routePoints.isEmpty()) {
+            return;
+        }
+
+        Polyline polyline = new Polyline();
+        polyline.setColor(color); // Blue color
+        polyline.setWidth(5); // Line width
+
+        for (GeoPoint point : routePoints) {
+            GeoPoint geoPoint = new GeoPoint(point.getLatitude(), point.getLongitude());
             polyline.addPoint(geoPoint);
         }
 
