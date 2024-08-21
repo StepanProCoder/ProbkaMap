@@ -16,6 +16,7 @@ import com.graphhopper.util.shapes.GHPoint;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
@@ -84,11 +85,22 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
     private void buildRoute(List<GeoPoint> waypoints) {
         try {
-            List<GeoPoint> betterRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
-            List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(betterRoute);
-            List<GHPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute);
-            displayRouteGH(routePoints, 0xFF0000FF);
+            List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
+            List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute);
+
+            Graph graph = new Graph();
+            for (int i = 0; i < routePoints.size() - 1; i++) {
+                graph.addEdge(routePoints.get(i), routePoints.get(i + 1));
+            }
+
+            GeoPoint source = routePoints.get(0);
+            GeoPoint destination = routePoints.get(routePoints.size() - 1);
+            Map<GeoPoint, GeoPoint> shortestPaths = PolylineToGraph.calculateShortestPath(graph, source);
+            List<GeoPoint> filteredRoute = PolylineToGraph.reconstructPath(shortestPaths, destination);
+
             displayRouteGeo(simplifiedRoute, 0xFF00FF00);
+            displayRouteGeo(routePoints, 0xFF0000FF);
+            displayRouteGeo(filteredRoute, 0xF0F00F0F);
             Log.d("RDP", simplifiedRoute.size()+"");
         } catch (Exception e) {
             e.printStackTrace();

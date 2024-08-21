@@ -48,7 +48,7 @@ public class OpenRouteServiceClient {
 
         return coordinatesList;
     }
-//
+
 //    public List<GHPoint> requestRoute(double startLat, double startLon, double endLat, double endLon) throws IOException {
 //        OkHttpClient client = new OkHttpClient();
 //
@@ -75,7 +75,7 @@ public class OpenRouteServiceClient {
 //        }
 //    }
 
-    public List<GHPoint> requestRoute(List<GeoPoint> points) throws IOException, JSONException {
+    public List<GeoPoint> requestRoute(List<GeoPoint> points) throws IOException, JSONException {
         OkHttpClient client = new OkHttpClient();
 
         // Формируем строку координат
@@ -110,11 +110,11 @@ public class OpenRouteServiceClient {
             String responseStr = response.body().string();
             List<double[]> coords = parseCoordinates(responseStr);
 
-            List<GHPoint> ghPoints = new ArrayList<>();
+            List<GeoPoint> geoPoints = new ArrayList<>();
             for (double[] coord : coords) {
-                ghPoints.add(new GHPoint(coord[1], coord[0])); // Поменяйте местами индексы, если порядок широты и долготы не совпадает
+                geoPoints.add(new GeoPoint(coord[1], coord[0])); // Поменяйте местами индексы, если порядок широты и долготы не совпадает
             }
-            return ghPoints;
+            return geoPoints;
         }
     }
 //
