@@ -26,6 +26,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     private Polyline currentPolyline;
     private List<GeoPoint> currentPoints;
     private Boolean drawingMode = false;
+    private static final double CLOSURE_THRESHOLD = 0.001;
 
     public MapTouchOverlay(MapView mapView) {
         super();
@@ -88,6 +89,10 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
             List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute);
 
+            if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) {
+                routePoints = routePoints.subList(0, routePoints.size() - 1);
+            }
+
             Graph graph = new Graph();
             for (int i = 0; i < routePoints.size() - 1; i++) {
                 graph.addEdge(routePoints.get(i), routePoints.get(i + 1));
@@ -105,6 +110,12 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public double distanceBetweenPoints(GeoPoint first, GeoPoint second) {
+        double latDistance = Math.pow(first.getLatitude() - second.getLatitude(), 2);
+        double lonDistance = Math.pow(first.getLongitude() - second.getLongitude(), 2);
+        return Math.sqrt(latDistance + lonDistance);
     }
 
     public void displayRouteGH(List<GHPoint> routePoints, int color) {
