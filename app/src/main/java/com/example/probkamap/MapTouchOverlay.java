@@ -87,7 +87,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     private void buildRoute(List<GeoPoint> waypoints) {
         try {
             List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
-            List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute);
+            List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular");
 
             if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) {
                 routePoints = routePoints.subList(0, routePoints.size() - 1);

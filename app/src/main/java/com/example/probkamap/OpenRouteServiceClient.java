@@ -75,7 +75,7 @@ public class OpenRouteServiceClient {
 //        }
 //    }
 
-    public List<GeoPoint> requestRoute(List<GeoPoint> points) throws IOException, JSONException {
+    public List<GeoPoint> requestRoute(List<GeoPoint> points, String mode) throws IOException, JSONException {
         OkHttpClient client = new OkHttpClient();
 
         // Формируем строку координат
@@ -87,7 +87,7 @@ public class OpenRouteServiceClient {
             coordinates.append(point.getLongitude()).append(",").append(point.getLatitude());
         }
 
-        String url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson";
+        String url = "https://api.openrouteservice.org/v2/directions/" + mode + "/geojson";
         JSONObject jsonBody = new JSONObject();
         JSONArray coordinatesArray = new JSONArray();
         for (GeoPoint point : points) {
@@ -98,6 +98,11 @@ public class OpenRouteServiceClient {
         }
         jsonBody.put("coordinates", coordinatesArray);
 
+        JSONArray radiuses = new JSONArray();
+        //radiuses.put(350);
+        radiuses.put(100000);
+        jsonBody.put("radiuses", radiuses);
+
         Request request = new Request.Builder()
                 .url(url)
                 .addHeader("Authorization", API_KEY)
@@ -106,8 +111,22 @@ public class OpenRouteServiceClient {
                 .build();
 
         try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
             String responseStr = response.body().string();
+
+            if (!response.isSuccessful())
+            {
+                List<GeoPoint> finalRoute = new ArrayList<>();
+                if(points.size() > 10) {
+                    for (int i = 0; i < points.size() - 10; i+=10) {
+                        Log.d("RECALC", "SEGMENTS");
+                        List<GeoPoint> segment = points.subList(i, i + 11);
+                        List<GeoPoint> routeSegment = requestRoute(segment, mode);
+                        finalRoute.addAll(routeSegment);
+                    }
+                }
+                return finalRoute;
+            }
+
             List<double[]> coords = parseCoordinates(responseStr);
 
             List<GeoPoint> geoPoints = new ArrayList<>();
