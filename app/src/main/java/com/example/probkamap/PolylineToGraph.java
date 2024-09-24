@@ -10,6 +10,13 @@ class Graph {
         this.adjacencyList = new HashMap<>();
     }
 
+    public Graph(Map<GeoPoint, GeoPoint> edges) {
+        this.adjacencyList = new HashMap<>();
+        for (Map.Entry<GeoPoint, GeoPoint> entry : edges.entrySet()) {
+            addEdge(entry.getKey(), entry.getValue());
+        }
+    }
+
     public void addEdge(GeoPoint source, GeoPoint destination) {
         adjacencyList.putIfAbsent(source, new ArrayList<>());
         adjacencyList.putIfAbsent(destination, new ArrayList<>());
@@ -94,6 +101,44 @@ public class PolylineToGraph {
         }
         Collections.reverse(path);
         return path;
+    }
+
+    public static Map<GeoPoint, GeoPoint> findMST(Graph graph, GeoPoint start) {
+        PriorityQueue<Map.Entry<GeoPoint, GeoPoint>> priorityQueue = new PriorityQueue<>(Comparator.comparingDouble(entry -> calculateDistance(entry.getKey(), entry.getValue())));
+        Set<GeoPoint> visited = new HashSet<>();
+        Map<GeoPoint, GeoPoint> mst = new HashMap<>();  // Здесь будет храниться предшественник для каждой вершины
+
+        // Начинаем с любой вершины, в данном случае с точки start
+        visited.add(start);
+        for (GeoPoint neighbor : graph.getNeighbors(start)) {
+            priorityQueue.add(new AbstractMap.SimpleEntry<>(start, neighbor));
+        }
+
+        // Алгоритм Прима
+        while (!priorityQueue.isEmpty()) {
+            Map.Entry<GeoPoint, GeoPoint> edge = priorityQueue.poll();
+            GeoPoint source = edge.getKey();
+            GeoPoint destination = edge.getValue();
+
+            if (!visited.contains(destination)) {
+                visited.add(destination);
+                mst.put(destination, source);  // Добавляем предшественника для каждой новой вершины
+
+                for (GeoPoint neighbor : graph.getNeighbors(destination)) {
+                    if (!visited.contains(neighbor)) {
+                        priorityQueue.add(new AbstractMap.SimpleEntry<>(destination, neighbor));
+                    }
+                }
+            }
+        }
+
+        return mst;  // Возвращаем карту предшественников
+    }
+
+    public static double calculateDistance(GeoPoint point1, GeoPoint point2) {
+        double latDiff = point1.getLatitude() - point2.getLatitude();
+        double lonDiff = point1.getLongitude() - point2.getLongitude();
+        return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
     }
 
 }

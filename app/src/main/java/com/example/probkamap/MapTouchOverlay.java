@@ -89,9 +89,9 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
             List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular");
 
-            if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) {
-                routePoints = routePoints.subList(0, routePoints.size() - 1);
-            }
+//            if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) {
+//                routePoints = routePoints.subList(0, routePoints.size() - 1);
+//            }
 
             Graph graph = new Graph();
             for (int i = 0; i < routePoints.size() - 1; i++) {
@@ -100,12 +100,16 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
             GeoPoint source = routePoints.get(0);
             GeoPoint destination = routePoints.get(routePoints.size() - 1);
-            Map<GeoPoint, GeoPoint> shortestPaths = PolylineToGraph.calculateShortestPath(graph, source);
+            Map<GeoPoint, GeoPoint> mst = PolylineToGraph.findMST(graph, source);
+            Graph mstGraph = new Graph(mst);
+            Map<GeoPoint, GeoPoint> shortestPaths = PolylineToGraph.calculateShortestPath(mstGraph, source);
             List<GeoPoint> filteredRoute = PolylineToGraph.reconstructPath(shortestPaths, destination);
+            List<GeoPoint> mstRoute = PolylineToGraph.reconstructPath(mst, destination);
 
             displayRouteGeo(simplifiedRoute, 0xFF00FF00);
             displayRouteGeo(routePoints, 0xFF0000FF);
-            displayRouteGeo(filteredRoute, 0xF0F00F0F);
+            displayRouteGeo(mstRoute, 0xFF0FF0F0);
+            //displayRouteGeo(filteredRoute, 0xF0F00F0F);
             Log.d("RDP", simplifiedRoute.size()+"");
         } catch (Exception e) {
             e.printStackTrace();

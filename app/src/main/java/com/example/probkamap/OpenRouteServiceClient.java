@@ -123,6 +123,10 @@ public class OpenRouteServiceClient {
                         List<GeoPoint> routeSegment = requestRoute(segment, mode);
                         finalRoute.addAll(routeSegment);
                     }
+                    Log.d("RECALC", "SEGMENTS");
+                    List<GeoPoint> segment = points.subList(points.size() - points.size() % 10, points.size());
+                    List<GeoPoint> routeSegment = requestRoute(segment, mode);
+                    finalRoute.addAll(routeSegment);
                 }
                 return finalRoute;
             }
