@@ -4,17 +4,23 @@ import android.graphics.Color;
 import android.util.Log;
 import android.view.MotionEvent;
 
+import org.locationtech.jts.geom.LinearRing;
 import org.osmdroid.views.overlay.Overlay;
 import org.osmdroid.views.overlay.Marker;
 import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.views.MapView;
 import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.overlay.PolyOverlayWithIW;
 import org.osmdroid.views.overlay.Polyline;
 
 import com.example.probkamap.OpenRouteServiceClient;
+import com.example.probkamap.algorithms.entity.Dijkstra;
+import com.example.probkamap.algorithms.entity.Prim;
 import com.graphhopper.util.shapes.GHPoint;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +32,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     private Polyline currentPolyline;
     private List<GeoPoint> currentPoints;
     private Boolean drawingMode = false;
-    private static final double CLOSURE_THRESHOLD = 0.001;
+    private static final double CLOSURE_THRESHOLD = 0.01;
 
     public MapTouchOverlay(MapView mapView) {
         super();
@@ -89,31 +95,68 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
             List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular");
 
-//            if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) {
-//                routePoints = routePoints.subList(0, routePoints.size() - 1);
-//            }
-
-            Graph graph = new Graph();
-            for (int i = 0; i < routePoints.size() - 1; i++) {
-                graph.addEdge(routePoints.get(i), routePoints.get(i + 1));
+            if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) // refactor this workaround, we can remove points of the solution if it is way smaller than original set of points, then recalculate
+            {
+                routePoints.remove(routePoints.size() - 1);
             }
 
-            GeoPoint source = routePoints.get(0);
-            GeoPoint destination = routePoints.get(routePoints.size() - 1);
-            Map<GeoPoint, GeoPoint> mst = PolylineToGraph.findMST(graph, source);
-            Graph mstGraph = new Graph(mst);
-            Map<GeoPoint, GeoPoint> shortestPaths = PolylineToGraph.calculateShortestPath(mstGraph, source);
-            List<GeoPoint> filteredRoute = PolylineToGraph.reconstructPath(shortestPaths, destination);
-            List<GeoPoint> mstRoute = PolylineToGraph.reconstructPath(mst, destination);
+            Prim prim = new Prim(new ArrayList<>());
+            Prim.Vertex start = prim.new Vertex(routePoints.get(0));
+            prim.graph.add(start);
+            Prim.Vertex curVertex = start;
+            for (int i = 1; i < routePoints.size(); i++)
+            {
+                Prim.Vertex vertexA = curVertex;
+                Prim.Vertex vertexB = findVertex(routePoints.get(i), prim);
+                Prim.Edge ab = prim.new Edge(distanceBetweenPoints(vertexA.getLabel(), vertexB.getLabel()));
+                vertexA.addEdge(vertexB, ab);
+                vertexB.addEdge(vertexA, ab);
+                curVertex = vertexB;
+            }
+            prim.run();
+            Dijkstra.Graph graph = prim.toDijkstra();
+            Dijkstra.Node startNode = prim.vertexNode.get(start);
+            Dijkstra.Node endNode = prim.vertexNode.get(curVertex);
+            Dijkstra dijkstra = new Dijkstra(graph, startNode);
+            graph = dijkstra.calculateShortestPathFromSource();
+            List<GeoPoint> res = shortestPath(endNode);
 
-            displayRouteGeo(simplifiedRoute, 0xFF00FF00);
-            displayRouteGeo(routePoints, 0xFF0000FF);
-            displayRouteGeo(mstRoute, 0xFF0FF0F0);
-            //displayRouteGeo(filteredRoute, 0xF0F00F0F);
-            Log.d("RDP", simplifiedRoute.size()+"");
+            GeoPoint gp = res.remove(0);
+            res.add(gp);
+
+            displayRouteGeo(simplifiedRoute, 0xFFFFFF00);
+            displayRouteGeo(routePoints, 0xFF000F0F);
+            displayRouteGeo(res, 0xFF00FF00);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public Prim.Vertex findVertex(GeoPoint point, Prim prim)
+    {
+        for (Prim.Vertex curVertex: prim.graph)
+        {
+            if(point.equals(curVertex.getLabel()))
+            {
+                return curVertex;
+            }
+        }
+        Prim.Vertex vertex = prim.new Vertex(point);
+        prim.graph.add(vertex);
+        return vertex;
+    }
+
+    public List<GeoPoint> shortestPath(Dijkstra.Node endNode)
+    {
+        List<GeoPoint> res = new ArrayList<>();
+        LinkedList<Dijkstra.Node> path = endNode.getShortestPath();
+        res.add(endNode.getLabel());
+        for (Dijkstra.Node curNode: path)
+        {
+            res.add(curNode.getLabel());
+        }
+        return res;
     }
 
     public double distanceBetweenPoints(GeoPoint first, GeoPoint second) {
@@ -154,8 +197,28 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             polyline.addPoint(geoPoint);
         }
 
+        try {
+            try {
+                Log.d("LRING", getLines(polyline).toString());
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        } catch (NoSuchFieldException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+
         mapView.getOverlayManager().add(polyline);
         mapView.invalidate(); // Перерисовываем карту
+    }
+
+    ArrayList<GeoPoint> getLines(Polyline polyline) throws NoSuchFieldException, IllegalAccessException, ClassNotFoundException {
+        Field field = PolyOverlayWithIW.class.getDeclaredField("mOutline");
+        field.setAccessible(true);
+        Field field2 = Class.forName("org.osmdroid.views.overlay.LinearRing").getDeclaredField("mOriginalPoints");
+        field2.setAccessible(true);
+        return (ArrayList<GeoPoint>) field2.get(field.get(polyline));
     }
 
     private void clearRoute() {
