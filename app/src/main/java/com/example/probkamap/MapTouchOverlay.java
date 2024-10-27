@@ -14,6 +14,7 @@ import org.osmdroid.views.overlay.PolyOverlayWithIW;
 import org.osmdroid.views.overlay.Polyline;
 
 import com.example.probkamap.OpenRouteServiceClient;
+import com.example.probkamap.algorithms.entity.DFS;
 import com.example.probkamap.algorithms.entity.Dijkstra;
 import com.example.probkamap.algorithms.entity.Prim;
 import com.graphhopper.util.shapes.GHPoint;
@@ -90,6 +91,26 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         return false;
     }
 
+    private void breakCycleInGraph(DFS dfs, Prim.Vertex start, Prim.Vertex end)
+    {
+        for (Prim.Vertex vertex: dfs.getGraph())
+        {
+            if(isPointInsideRectangle(start.getLabel(), end.getLabel(), vertex.getLabel()))
+            {
+                for (Map.Entry<Prim.Vertex, Prim.Edge> entry: vertex.getEdges().entrySet())
+                {
+                    Prim.Vertex point = entry.getKey();
+                    if(dfs.isReachableWithoutDirectEdge(vertex, point))
+                    {
+                        vertex.getEdges().remove(point);
+                        point.getEdges().remove(vertex);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     private void buildRoute(List<GeoPoint> waypoints) {
         try {
             List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
@@ -113,6 +134,10 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
                 vertexB.addEdge(vertexA, ab);
                 curVertex = vertexB;
             }
+
+            DFS dfs = new DFS(prim.graph);
+            breakCycleInGraph(dfs, start, curVertex);
+
             prim.run();
             Dijkstra.Graph graph = prim.toDijkstra();
             Dijkstra.Node startNode = prim.vertexNode.get(start);
@@ -163,6 +188,22 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         double latDistance = Math.pow(first.getLatitude() - second.getLatitude(), 2);
         double lonDistance = Math.pow(first.getLongitude() - second.getLongitude(), 2);
         return Math.sqrt(latDistance + lonDistance);
+    }
+
+    public boolean isPointInsideRectangle(GeoPoint point1, GeoPoint point2, GeoPoint targetPoint) {
+        // Найдем минимальные и максимальные значения долготы и широты
+        double minLongitude = Math.min(point1.getLongitude(), point2.getLongitude());
+        double maxLongitude = Math.max(point1.getLongitude(), point2.getLongitude());
+        double minLatitude = Math.min(point1.getLatitude(), point2.getLatitude());
+        double maxLatitude = Math.max(point1.getLatitude(), point2.getLatitude());
+
+        // Получаем координаты целевой точки
+        double targetLongitude = targetPoint.getLongitude();
+        double targetLatitude = targetPoint.getLatitude();
+
+        // Проверяем, находится ли точка в пределах прямоугольника
+        return targetLongitude >= minLongitude && targetLongitude <= maxLongitude &&
+                targetLatitude >= minLatitude && targetLatitude <= maxLatitude;
     }
 
     public void displayRouteGH(List<GHPoint> routePoints, int color) {

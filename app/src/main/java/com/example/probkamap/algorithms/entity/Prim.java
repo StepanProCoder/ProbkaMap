@@ -120,6 +120,10 @@ public class Prim
             isVisited = visited;
         }
 
+        public Map<Vertex, Edge> getEdges() {
+            return edges;
+        }
+
         public GeoPoint getLabel() {
             return label;
         }
