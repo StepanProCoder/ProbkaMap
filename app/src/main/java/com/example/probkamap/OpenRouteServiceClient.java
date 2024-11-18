@@ -1,16 +1,16 @@
 package com.example.probkamap;
 
-import android.util.Log;
 
 import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.graphhopper.util.shapes.GHPoint;
 import com.google.gson.Gson;
 
 import org.json.JSONArray;
@@ -49,45 +49,15 @@ public class OpenRouteServiceClient {
         return coordinatesList;
     }
 
-//    public List<GHPoint> requestRoute(double startLat, double startLon, double endLat, double endLon) throws IOException {
-//        OkHttpClient client = new OkHttpClient();
-//
-//        String url = "https://api.openrouteservice.org/v2/directions/cycling-regular?api_key=" + API_KEY +
-//                "&start=" + startLon + "," + startLat +
-//                "&end=" + endLon + "," + endLat;
-//
-//        Request request = new Request.Builder()
-//                .url(url)
-//                .build();
-//
-//        try (Response response = client.newCall(request).execute()) {
-//            if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-//            String responseStr = response.body().string();
-//            Log.d("ROUTE", responseStr);
-//            List<double[]> coords = parseCoordinates(responseStr);
-//
-//            List<GHPoint> ghPoints = new ArrayList<>();
-//            for (double[] coord : coords) {
-//                ghPoints.add(new GHPoint(coord[1], coord[0])); // Поменяйте местами индексы, если порядок широты и долготы не совпадает
-//                Log.d("ROUTE", coord[1] + " " + coord[0]);
-//            }
-//            return ghPoints;
-//        }
-//    }
+    public void requestRoute(List<GeoPoint> points, String mode, RouteCallback callback) throws JSONException {
+        // Создаем и настраиваем Retrofit
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("https://api.openrouteservice.org/")
+                .build();
 
-    public List<GeoPoint> requestRoute(List<GeoPoint> points, String mode) throws IOException, JSONException {
-        OkHttpClient client = new OkHttpClient();
+        RouteApiService apiService = retrofit.create(RouteApiService.class);
 
-        // Формируем строку координат
-        StringBuilder coordinates = new StringBuilder();
-        for (GeoPoint point : points) {
-            if (coordinates.length() > 0) {
-                coordinates.append("|");
-            }
-            coordinates.append(point.getLongitude()).append(",").append(point.getLatitude());
-        }
-
-        String url = "https://api.openrouteservice.org/v2/directions/" + mode + "/geojson";
+        // Формируем тело запроса
         JSONObject jsonBody = new JSONObject();
         JSONArray coordinatesArray = new JSONArray();
         for (GeoPoint point : points) {
@@ -99,91 +69,43 @@ public class OpenRouteServiceClient {
         jsonBody.put("coordinates", coordinatesArray);
 
         JSONArray radiuses = new JSONArray();
-        //radiuses.put(350);
         radiuses.put(100000);
         jsonBody.put("radiuses", radiuses);
 
-        Request request = new Request.Builder()
-                .url(url)
-                .addHeader("Authorization", API_KEY)
-                .addHeader("Content-Type", "application/json")
-                .post(okhttp3.RequestBody.create(jsonBody.toString(), okhttp3.MediaType.get("application/json; charset=utf-8")))
-                .build();
+        RequestBody requestBody = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"),
+                jsonBody.toString()
+        );
 
-        try (Response response = client.newCall(request).execute()) {
-            String responseStr = response.body().string();
+        // Создаем вызов Retrofit
+        Call<ResponseBody> call = apiService.requestRoute(mode, API_KEY, requestBody);
 
-            if (!response.isSuccessful())
-            {
-                List<GeoPoint> finalRoute = new ArrayList<>();
-                if(points.size() > 10) {
-                    for (int i = 0; i < points.size() - 10; i+=10) {
-                        Log.d("RECALC", "SEGMENTS");
-                        List<GeoPoint> segment = points.subList(i, i + 11);
-                        List<GeoPoint> routeSegment = requestRoute(segment, mode);
-                        finalRoute.addAll(routeSegment);
+        // Обрабатываем результат асинхронно
+        call.enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        String responseStr = response.body().string();
+                        List<double[]> coords = parseCoordinates(responseStr);
+                        List<GeoPoint> geoPoints = new ArrayList<>();
+                        for (double[] coord : coords) {
+                            geoPoints.add(new GeoPoint(coord[1], coord[0])); // Поменяйте местами индексы, если порядок широты и долготы не совпадает
+                        }
+                        callback.onSuccess(geoPoints);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
                     }
-                    Log.d("RECALC", "SEGMENTS");
-                    List<GeoPoint> segment = points.subList(points.size() - points.size() % 10, points.size());
-                    List<GeoPoint> routeSegment = requestRoute(segment, mode);
-                    finalRoute.addAll(routeSegment);
+                } else {
+                    callback.onFailure(new IOException("Ошибка: " + response.code()));
                 }
-                return finalRoute;
             }
 
-            List<double[]> coords = parseCoordinates(responseStr);
-
-            List<GeoPoint> geoPoints = new ArrayList<>();
-            for (double[] coord : coords) {
-                geoPoints.add(new GeoPoint(coord[1], coord[0])); // Поменяйте местами индексы, если порядок широты и долготы не совпадает
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+                callback.onFailure(t);
             }
-            return geoPoints;
-        }
+        });
     }
-//
-//    public List<double[]> parseCoordinates(String jsonString) throws JSONException {
-//        // Парсинг JSON ответа
-//        Log.d("JSON", jsonString);
-//        JSONObject jsonObject = new JSONObject(jsonString);
-//        String polyline = jsonObject.getJSONArray("routes").getJSONObject(0).getString("geometry");
-//
-//        // Декодирование полилинии
-//        List<double[]> decodedCoordinates = decodePolyline(polyline);
-//
-//        return decodedCoordinates;
-//    }
-//
-//    private List<double[]> decodePolyline(String encoded) {
-//        List<double[]> poly = new ArrayList<>();
-//        int index = 0, len = encoded.length();
-//        int lat = 0, lng = 0;
-//
-//        while (index < len) {
-//            int b, shift = 0, result = 0;
-//            do {
-//                b = encoded.charAt(index++) - 63;
-//                result |= (b & 0x1f) << shift;
-//                shift += 5;
-//            } while (b >= 0x20);
-//            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-//            lat += dlat;
-//
-//            shift = 0;
-//            result = 0;
-//            do {
-//                b = encoded.charAt(index++) - 63;
-//                result |= (b & 0x1f) << shift;
-//                shift += 5;
-//            } while (b >= 0x20);
-//            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-//            lng += dlng;
-//
-//            double latitude = lat / 1E5;
-//            double longitude = lng / 1E5;
-//            poly.add(new double[]{latitude, longitude});
-//        }
-//
-//        return poly;
-//    }
 
 }

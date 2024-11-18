@@ -111,47 +111,55 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         }
     }
 
+    private List<GeoPoint> calcRoute(List<GeoPoint> routePoints)
+    {
+        Prim prim = new Prim(new ArrayList<>());
+        Prim.Vertex start = prim.new Vertex(routePoints.get(0));
+        prim.graph.add(start);
+        Prim.Vertex curVertex = start;
+        for (int i = 1; i < routePoints.size(); i++)
+        {
+            Prim.Vertex vertexA = curVertex;
+            Prim.Vertex vertexB = findVertex(routePoints.get(i), prim);
+            Prim.Edge ab = prim.new Edge(distanceBetweenPoints(vertexA.getLabel(), vertexB.getLabel()));
+            vertexA.addEdge(vertexB, ab);
+            vertexB.addEdge(vertexA, ab);
+            curVertex = vertexB;
+        }
+
+        DFS dfs = new DFS(prim.graph);
+        breakCycleInGraph(dfs, start, curVertex);
+
+        prim.run();
+        Dijkstra.Graph graph = prim.toDijkstra();
+        Dijkstra.Node startNode = prim.vertexNode.get(start);
+        Dijkstra.Node endNode = prim.vertexNode.get(curVertex);
+        Dijkstra dijkstra = new Dijkstra(graph, startNode);
+        graph = dijkstra.calculateShortestPathFromSource();
+        List<GeoPoint> res = shortestPath(endNode);
+
+        GeoPoint gp = res.remove(0);
+        res.add(gp);
+
+        return res;
+    }
+
     private void buildRoute(List<GeoPoint> waypoints) {
         try {
             List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
-            List<GeoPoint> routePoints = openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular");
+            openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular", new RouteCallback() {
+                @Override
+                public void onSuccess(List<GeoPoint> route) {
+                    displayRouteGeo(simplifiedRoute, 0xFF000000);
+                    displayRouteGeo(route, 0xFF0000FF);
+                    displayRouteGeo(calcRoute(route), 0xFFFF0000);
+                }
 
-            if (distanceBetweenPoints(routePoints.get(0), routePoints.get(routePoints.size() - 1)) < CLOSURE_THRESHOLD) // refactor this workaround, we can remove points of the solution if it is way smaller than original set of points, then recalculate
-            {
-                routePoints.remove(routePoints.size() - 1);
-            }
+                @Override
+                public void onFailure(Throwable t) {
 
-            Prim prim = new Prim(new ArrayList<>());
-            Prim.Vertex start = prim.new Vertex(routePoints.get(0));
-            prim.graph.add(start);
-            Prim.Vertex curVertex = start;
-            for (int i = 1; i < routePoints.size(); i++)
-            {
-                Prim.Vertex vertexA = curVertex;
-                Prim.Vertex vertexB = findVertex(routePoints.get(i), prim);
-                Prim.Edge ab = prim.new Edge(distanceBetweenPoints(vertexA.getLabel(), vertexB.getLabel()));
-                vertexA.addEdge(vertexB, ab);
-                vertexB.addEdge(vertexA, ab);
-                curVertex = vertexB;
-            }
-
-            DFS dfs = new DFS(prim.graph);
-            breakCycleInGraph(dfs, start, curVertex);
-
-            prim.run();
-            Dijkstra.Graph graph = prim.toDijkstra();
-            Dijkstra.Node startNode = prim.vertexNode.get(start);
-            Dijkstra.Node endNode = prim.vertexNode.get(curVertex);
-            Dijkstra dijkstra = new Dijkstra(graph, startNode);
-            graph = dijkstra.calculateShortestPathFromSource();
-            List<GeoPoint> res = shortestPath(endNode);
-
-            GeoPoint gp = res.remove(0);
-            res.add(gp);
-
-            displayRouteGeo(simplifiedRoute, 0xFFFFFF00);
-            displayRouteGeo(routePoints, 0xFF000F0F);
-            displayRouteGeo(res, 0xFF00FF00);
+                }
+            });
 
         } catch (Exception e) {
             e.printStackTrace();
