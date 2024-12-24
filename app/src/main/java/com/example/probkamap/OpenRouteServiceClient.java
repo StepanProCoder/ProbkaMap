@@ -52,7 +52,7 @@ public class OpenRouteServiceClient {
     public void requestRoute(List<GeoPoint> points, String mode, RouteCallback callback) throws JSONException {
         // Создаем и настраиваем Retrofit
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("https://api.openrouteservice.org/")
+                .baseUrl("http://10.0.2.2:8080/ors/")
                 .build();
 
         RouteApiService apiService = retrofit.create(RouteApiService.class);
@@ -78,7 +78,7 @@ public class OpenRouteServiceClient {
         );
 
         // Создаем вызов Retrofit
-        Call<ResponseBody> call = apiService.requestRoute(mode, API_KEY, requestBody);
+        Call<ResponseBody> call = apiService.requestRoute(mode, requestBody);
 
         // Обрабатываем результат асинхронно
         call.enqueue(new Callback<ResponseBody>() {

@@ -13,7 +13,6 @@ public interface RouteApiService {
     @POST("v2/directions/{mode}/geojson")
     Call<ResponseBody> requestRoute(
             @Path("mode") String mode,
-            @Header("Authorization") String apiKey,
             @Body RequestBody body
     );
 }
