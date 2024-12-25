@@ -32,8 +32,15 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     private OpenRouteServiceClient openRouteServiceClient;
     private Polyline currentPolyline;
     private List<GeoPoint> currentPoints;
+
+    private Polyline editablePolyline;
+    private List<GeoPoint> editablePoints;
     private Boolean drawingMode = false;
+    private Boolean editingMode = false;
     private static final double CLOSURE_THRESHOLD = 0.01;
+    private List<Marker> markers = new ArrayList<>();
+    private Marker activeMarker = null;
+
 
     public MapTouchOverlay(MapView mapView) {
         super();
@@ -70,6 +77,46 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 //        }
 //        return false; // Не обрабатывали событие нажатия
 
+        if (editingMode) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    // Проверяем, попали ли в маркер
+                    for (Marker marker : markers) {
+                        if (marker.isDraggable() && marker.hitTest(event, mapView)) {
+                            activeMarker = marker;
+                            return true; // Начинаем перетаскивание
+                        }
+                    }
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    if (activeMarker != null) {
+                        // Обновляем положение маркера
+                        GeoPoint newPosition = (GeoPoint) mapView.getProjection().fromPixels((int) event.getX(), (int) event.getY());
+                        activeMarker.setPosition(newPosition);
+
+                        // Обновляем привязанную точку в editablePoints
+                        int index = markers.indexOf(activeMarker);
+                        if (index != -1) {
+                            editablePoints.set(index, newPosition);
+                            editablePolyline.setPoints(editablePoints);
+                            mapView.invalidate();
+                        }
+                        return true; // Продолжаем перетаскивание
+                    }
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                    if (activeMarker != null) {
+                        // Завершаем перетаскивание
+                        activeMarker = null;
+                        return true; // Обработали завершение
+                    }
+                    break;
+            }
+            return true;
+        }
+
         if(!drawingMode)
         {
             return super.onTouchEvent(event, mapView);
@@ -90,6 +137,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         }
         return false;
     }
+
 
     private void breakCycleInGraph(DFS dfs, Prim.Vertex start, Prim.Vertex end)
     {
@@ -150,8 +198,8 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular", new RouteCallback() {
                 @Override
                 public void onSuccess(List<GeoPoint> route) {
-                    displayRouteGeo(simplifiedRoute, 0xFF000000);
-                    displayRouteGeo(route, 0xFF0000FF);
+                    //displayRouteGeo(simplifiedRoute, 0xFF000000);
+                    //displayRouteGeo(route, 0xFF0000FF);
                     displayRouteGeo(calcRoute(route), 0xFFFF0000);
                 }
 
@@ -258,6 +306,9 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             throw new RuntimeException(e);
         }
 
+        editablePoints = routePoints;
+        editablePolyline = polyline;
+
         mapView.getOverlayManager().add(polyline);
         mapView.invalidate(); // Перерисовываем карту
     }
@@ -292,6 +343,31 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         mapView.invalidate(); // Перерисовка карты
     }
 
+    private void clearMarkers()
+    {
+        // Удаляем старые маркеры
+        for (Marker marker : markers) {
+            mapView.getOverlays().remove(marker);
+        }
+        markers.clear();
+    }
+
+    private void updateMarkers() {
+        clearMarkers();
+
+        // Добавляем новые маркеры на каждой точке полилинии
+        for (GeoPoint point : editablePoints) {
+            Marker marker = new Marker(mapView);
+            marker.setPosition(point);
+            marker.setDraggable(true);
+
+            markers.add(marker);
+            mapView.getOverlays().add(marker);
+        }
+
+        mapView.invalidate();
+    }
+
     @Override
     public boolean singleTapConfirmedHelper(GeoPoint p) {
         return false;
@@ -305,5 +381,18 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     public void setDrawingMode(Boolean drawingMode)
     {
         this.drawingMode = drawingMode;
+    }
+
+    public void setEditingMode(Boolean editingMode)
+    {
+        this.editingMode = editingMode;
+        if (!editingMode) {
+            clearMarkers();
+        } else {
+            // Создаем маркеры при входе в режим редактирования
+            updateMarkers();
+        }
+        //setModified(false); // Сбрасываем флаг изменений
+        mapView.invalidate();
     }
 }

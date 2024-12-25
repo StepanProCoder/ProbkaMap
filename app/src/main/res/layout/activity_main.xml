@@ -32,4 +32,24 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/toggle_mode_button" />
 
+    <ToggleButton
+        android:id="@+id/toggle_editing_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textOff="START EDITING"
+        android:textOn="STOP EDITING"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toggle_clear_button" />
+
+    <ToggleButton
+        android:id="@+id/toggle_recalculate_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textOff="RECALCULATE"
+        android:textOn="RECALCULATE"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toggle_editing_button" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -53,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private MapView mapView;
 
     private Boolean drawingMode = false;
+    private Boolean editingMode = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,6 +92,24 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 mapTouchOverlay.clearAllPolylines();
+            }
+        });
+
+        Button toggleEditingButton = findViewById(R.id.toggle_editing_button);
+        toggleEditingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                editingMode = !editingMode;
+                mapTouchOverlay.setEditingMode(editingMode);
+                toggleEditingButton.setText(editingMode ? "STOP EDITING" : "START EDITING");
+            }
+        });
+
+        Button toggleRecalculateButton = findViewById(R.id.toggle_recalculate_button);
+        toggleRecalculateButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //TODO recalculate
             }
         });
 
