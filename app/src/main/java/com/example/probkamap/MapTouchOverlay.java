@@ -4,6 +4,7 @@ import android.graphics.Color;
 import android.util.Log;
 import android.view.MotionEvent;
 
+import org.json.JSONException;
 import org.locationtech.jts.geom.LinearRing;
 import org.osmdroid.views.overlay.Overlay;
 import org.osmdroid.views.overlay.Marker;
@@ -328,6 +329,27 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
             currentPoints.clear();
             currentPolyline = new Polyline();
             mapView.getOverlayManager().add(currentPolyline);
+        }
+    }
+
+    public void recalculateEditablePolyline()
+    {
+        try {
+            openRouteServiceClient.requestRoute(editablePoints, "cycling-regular", new RouteCallback() {
+                @Override
+                public void onSuccess(List<GeoPoint> route) {
+                    mapView.getOverlayManager().remove(editablePolyline);
+                    displayRouteGeo(calcRoute(route), 0xFFFF0000);
+                    updateMarkers();
+                }
+
+                @Override
+                public void onFailure(Throwable t) {
+
+                }
+            });
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
         }
     }
 
