@@ -88,7 +88,30 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
                             return true; // Начинаем перетаскивание
                         }
                     }
-                    break;
+
+                    // Если кликнули не на маркер, ищем ближайший сегмент
+                    GeoPoint newPoint = (GeoPoint) mapView.getProjection().fromPixels((int) event.getX(), (int) event.getY());
+
+                    if (!editablePoints.isEmpty()) {
+                        int insertIndex = findClosestSegmentIndex(newPoint, editablePoints);
+                        editablePoints.add(insertIndex + 1, newPoint);
+                        editablePolyline.setPoints(editablePoints);
+                    } else {
+                        editablePoints.add(newPoint);
+                        editablePolyline.setPoints(editablePoints);
+                    }
+
+                    mapView.invalidate();
+
+                    // Создаем новый маркер для точки
+                    Marker newMarker = new Marker(mapView);
+                    newMarker.setPosition(newPoint);
+                    newMarker.setDraggable(true);
+                    markers.add(newMarker);
+                    mapView.getOverlays().add(newMarker);
+                    mapView.invalidate();
+
+                    return true;
 
                 case MotionEvent.ACTION_MOVE:
                     if (activeMarker != null) {
@@ -139,6 +162,47 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         return false;
     }
 
+    /**
+     * Находит индекс ближайшего сегмента (между двумя точками), к которому ближе всего новая точка.
+     */
+    private int findClosestSegmentIndex(GeoPoint newPoint, List<GeoPoint> points) {
+        int closestIndex = 0;
+        double minDistance = Double.MAX_VALUE;
+
+        for (int i = 0; i < points.size() - 1; i++) {
+            GeoPoint p1 = points.get(i);
+            GeoPoint p2 = points.get(i + 1);
+
+            double distance = distanceToSegment(newPoint, p1, p2);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestIndex = i;
+            }
+        }
+
+        return closestIndex;
+    }
+
+    /**
+     * Вычисляет минимальное расстояние от точки до отрезка (приближенно).
+     */
+    private double distanceToSegment(GeoPoint p, GeoPoint a, GeoPoint b) {
+        double latA = a.getLatitude(), lonA = a.getLongitude();
+        double latB = b.getLatitude(), lonB = b.getLongitude();
+        double latP = p.getLatitude(), lonP = p.getLongitude();
+
+        double dx = latB - latA;
+        double dy = lonB - lonA;
+        if (dx == 0 && dy == 0) return Math.hypot(latP - latA, lonP - lonA);
+
+        double t = ((latP - latA) * dx + (lonP - lonA) * dy) / (dx * dx + dy * dy);
+        t = Math.max(0, Math.min(1, t));
+
+        double closestLat = latA + t * dx;
+        double closestLon = lonA + t * dy;
+
+        return Math.hypot(latP - closestLat, lonP - closestLon);
+    }
 
     private void breakCycleInGraph(DFS dfs, Prim.Vertex start, Prim.Vertex end)
     {
@@ -162,7 +226,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
     private List<GeoPoint> calcRoute(List<GeoPoint> routePoints)
     {
-        Prim prim = new Prim(new ArrayList<>());
+        Prim prim = new Prim(new ArrayList<>()); // Прима можно убрать (возможно выкинуть ребра для нужного пути)!!!
         Prim.Vertex start = prim.new Vertex(routePoints.get(0));
         prim.graph.add(start);
         Prim.Vertex curVertex = start;
@@ -190,12 +254,12 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         GeoPoint gp = res.remove(0);
         res.add(gp);
 
-        return res;
+        return RamerDouglasPeucker.simplifyRoute(res, 0.000015);
     }
 
     private void buildRoute(List<GeoPoint> waypoints) {
         try {
-            List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints);
+            List<GeoPoint> simplifiedRoute = RamerDouglasPeucker.simplifyRoute(waypoints, 0.0001);
             openRouteServiceClient.requestRoute(simplifiedRoute, "cycling-regular", new RouteCallback() {
                 @Override
                 public void onSuccess(List<GeoPoint> route) {

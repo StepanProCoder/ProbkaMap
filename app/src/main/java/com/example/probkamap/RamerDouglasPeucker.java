@@ -110,8 +110,8 @@ public class RamerDouglasPeucker {
         return points;
     }
 
-    public static final List<GeoPoint> simplifyRoute(List<GeoPoint> points)
+    public static final List<GeoPoint> simplifyRoute(List<GeoPoint> points, double epsilon)
     {
-        return convertToGeoPoints(douglasPeucker(convertToDoubleArray(points), 0.0001));
+        return convertToGeoPoints(douglasPeucker(convertToDoubleArray(points), epsilon));
     }
 }
