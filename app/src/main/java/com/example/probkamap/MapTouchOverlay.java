@@ -2,6 +2,7 @@ package com.example.probkamap;
 
 import android.graphics.Color;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 
 import org.json.JSONException;
@@ -41,6 +42,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     private static final double CLOSURE_THRESHOLD = 0.01;
     private List<Marker> markers = new ArrayList<>();
     private Marker activeMarker = null;
+    private GestureDetector gestureDetector;
 
 
     public MapTouchOverlay(MapView mapView) {
@@ -50,6 +52,19 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         currentPoints = new ArrayList<>();
         currentPolyline = new Polyline();
         mapView.getOverlayManager().add(currentPolyline);
+
+        gestureDetector = new GestureDetector(mapView.getContext(), new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public void onLongPress(MotionEvent e) {
+                // Проверяем, попали ли в маркер
+                for (Marker marker : markers) {
+                    if (marker.hitTest(e, mapView)) {
+                        removeMarker(marker);
+                        break;
+                    }
+                }
+            }
+        });
     }
 
     public void setCurrentPoint(GeoPoint currentPoint) {
@@ -79,6 +94,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 //        return false; // Не обрабатывали событие нажатия
 
         if (editingMode) {
+            gestureDetector.onTouchEvent(event);
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     // Проверяем, попали ли в маркер
@@ -160,6 +176,20 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
                 return true;
         }
         return false;
+    }
+
+    /**
+     * Метод для удаления маркера и соответствующей точки.
+     */
+    private void removeMarker(Marker marker) {
+        int index = markers.indexOf(marker);
+        if (index != -1) {
+            markers.remove(index);            // Удаляем маркер
+            editablePoints.remove(index);     // Удаляем точку из списка маршрута
+            editablePolyline.setPoints(editablePoints); // Обновляем линию
+            mapView.getOverlays().remove(marker);
+            mapView.invalidate();             // Обновляем карту
+        }
     }
 
     /**
@@ -254,7 +284,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         GeoPoint gp = res.remove(0);
         res.add(gp);
 
-        return RamerDouglasPeucker.simplifyRoute(res, 0.000015);
+        return RamerDouglasPeucker.simplifyRoute(res, 0.00002);
     }
 
     private void buildRoute(List<GeoPoint> waypoints) {
