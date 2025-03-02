@@ -37,6 +37,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
     private Polyline editablePolyline;
     private List<GeoPoint> editablePoints;
+    private List<GeoPoint> priorityPoints;
     private Boolean drawingMode = false;
     private Boolean editingMode = false;
     private static final double CLOSURE_THRESHOLD = 0.01;
@@ -49,6 +50,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
         super();
         this.mapView = mapView;
         this.openRouteServiceClient = new OpenRouteServiceClient();
+        priorityPoints = new ArrayList<>();
         currentPoints = new ArrayList<>();
         currentPolyline = new Polyline();
         mapView.getOverlayManager().add(currentPolyline);
@@ -107,6 +109,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
 
                     // Если кликнули не на маркер, ищем ближайший сегмент
                     GeoPoint newPoint = (GeoPoint) mapView.getProjection().fromPixels((int) event.getX(), (int) event.getY());
+                    priorityPoints.add(newPoint);
 
                     if (!editablePoints.isEmpty()) {
                         int insertIndex = findClosestSegmentIndex(newPoint, editablePoints);
@@ -338,7 +341,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
     public double distanceBetweenPoints(GeoPoint first, GeoPoint second) {
         double latDistance = Math.pow(first.getLatitude() - second.getLatitude(), 2);
         double lonDistance = Math.pow(first.getLongitude() - second.getLongitude(), 2);
-        return Math.sqrt(latDistance + lonDistance);
+        return priorityPoints.contains(second) ? 0 : Math.sqrt(latDistance + lonDistance);
     }
 
     public boolean isPointInsideRectangle(GeoPoint point1, GeoPoint point2, GeoPoint targetPoint) {
@@ -435,6 +438,7 @@ public class MapTouchOverlay extends Overlay implements MapEventsReceiver {
                     mapView.getOverlayManager().remove(editablePolyline);
                     displayRouteGeo(calcRoute(route), 0xFFFF0000);
                     updateMarkers();
+                    priorityPoints.clear();
                 }
 
                 @Override
